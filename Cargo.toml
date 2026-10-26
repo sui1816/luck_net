@@ -1,0 +1,38 @@
+[package]
+name = "gatematrix"
+version = "0.1.0"
+edition = "2021"
+authors = ["GateMatrix Dev Team"]
+description = "VPNGate multi-egress proxy matrix system powered by sing-box and Rust"
+
+[dependencies]
+# 异步运行时与定时任务
+tokio = { version = "1.38", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+
+# 网络请求与数据处理
+reqwest = { version = "0.12", default-features = false, features = ["gzip", "json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+base64 = "0.22"
+csv = "1.3"
+
+# Web 服务与路由
+axum = { version = "0.7", features = ["macros"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# 日志与跟踪
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# 并发安全与内存缓存
+dashmap = "6.0"
+arc-swap = "1.7"
+parking_lot = "0.12"
+
+# 基础工具
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+thiserror = "1.0"
+rand = "0.8"

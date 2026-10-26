@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # 1. GateMatrix 控制器核心引擎 (Rust 开发，内置 Web 面板与订阅)
+  gatematrix_controller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gatematrix_controller
+    restart: always
+    privileged: true
+    network_mode: "host" # 关键：host 模式承载 5000 端口，避免 docker-proxy 进程爆炸
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+      - ./data:/app/data
+      - ./sing-box-conf:/etc/sing-box
+    environment:
+      - RUST_LOG=info
+      - BASE_DOMAIN=${BASE_DOMAIN:-vpn.yourdomain.com}
+      - WEB_PORT=${WEB_PORT:-28080}
+      - AUTH_USER=${AUTH_USER:-matrix_user}
+      - AUTH_PASS=${AUTH_PASS:-matrix_pass_123456}
+      - SINGBOX_CONF_PATH=/etc/sing-box/config.json
+
+  # 2. sing-box 核心代理路由服务
+  gatematrix_singbox:
+    image: ghcr.io/sagernet/sing-box:latest
+    container_name: gatematrix_singbox
+    restart: always
+    network_mode: "host" # 使用 host 模式直接绑定 50001-55000 及 60001
+    volumes:
+      - ./sing-box-conf:/etc/sing-box
+    command: ["run", "-c", "/etc/sing-box/config.json"]
+    depends_on:
+      - gatematrix_controller
