@@ -29,9 +29,11 @@ services:
       - REALITY_SHORT_ID=${REALITY_SHORT_ID}
       - REALITY_PRIVATE_KEY=${REALITY_PRIVATE_KEY}
       - REALITY_PUB_KEY=${REALITY_PUB_KEY}
-      - HY2_PORT=${HY2_PORT:-443}
+      - HY2_PORT=${HY2_PORT:-9443}
       - HY2_CERT_PATH=${HY2_CERT_PATH:-/etc/sing-box/cert.pem}
       - HY2_KEY_PATH=${HY2_KEY_PATH:-/etc/sing-box/key.pem}
+      - SOCKS_PORT=${SOCKS_PORT:-10800}
+      - USER_PREFIX=${USER_PREFIX:-lucknet}
       - MAX_HOT_TUNNELS=${MAX_HOT_TUNNELS:-35}
       - AUTH_USER=${AUTH_USER:-matrix_user}
       - AUTH_PASS=${AUTH_PASS:-matrix_pass_123456}

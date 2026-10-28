@@ -17,10 +17,12 @@ pub struct AppState {
     pub server_ip: String,
     pub reality_port: u16,
     pub hy2_port: u16,
+    pub socks_port: u16,
     pub reality_pub_key: String,
     pub reality_short_id: String,
     pub reality_server_name: String,
     pub sub_token: String,
+    pub user_prefix: String,
 }
 
 #[derive(Deserialize)]
@@ -51,7 +53,7 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
 
     let mut rows = String::new();
     for (idx, m) in mappings.iter().enumerate() {
-        let (ip, country, ip_type, speed_str, rtt, score, uuid, hy2_pass) = if let Some(node) = &m.target_node {
+        let (ip, country, ip_type, speed_str, rtt, score, uuid, hy2_pass, socks_user) = if let Some(node) = &m.target_node {
             let speed_mbps = (node.speed_bps as f64) / 1_000_000.0;
             let flag = match node.country_short.to_uppercase().as_str() {
                 "JP" => "🇯🇵",
@@ -75,6 +77,7 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
                 format!("{:.1}", node.dynamic_score),
                 format!("{}-{}-4000-8000-{:012x}", prefix, mid, idx + 1),
                 format!("pass_{}_{:04}", &state.sub_token[..8.min(state.sub_token.len())], idx + 1),
+                format!("{}_{}", state.user_prefix, idx + 1),
             )
         } else if m.is_direct {
             (
@@ -86,6 +89,7 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
                 "100.0".to_string(),
                 format!("{}-{}-4000-8000-000000000000", prefix, mid),
                 format!("pass_{}_direct", &state.sub_token[..8.min(state.sub_token.len())]),
+                format!("{}_direct", state.user_prefix),
             )
         } else {
             (
@@ -95,6 +99,7 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
                 "--".to_string(),
                 "--".to_string(),
                 "0.0".to_string(),
+                "--".to_string(),
                 "--".to_string(),
                 "--".to_string(),
             )
@@ -112,6 +117,7 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
                 <td>{}</td>
                 <td><code>{}</code></td>
                 <td><code>{}</code></td>
+                <td><code>{}</code></td>
             </tr>",
             idx,
             if m.is_direct { "Direct" } else { "Relay" },
@@ -122,7 +128,8 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
             rtt,
             score,
             &uuid[..18],
-            hy2_pass
+            hy2_pass,
+            socks_user
         ));
     }
 
@@ -158,25 +165,30 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
 </head>
 <body>
     <div class="header">
-        <h1>🌐 GateMatrix 双栈出口代理矩阵</h1>
+        <h1>🌐 GateMatrix 三栈出口代理矩阵</h1>
         <div class="links">
             <a class="sub-link" href="/api/subscribe?token={}&proto=reality&format=clash" target="_blank">导出 Reality (Clash)</a>
             <a class="sub-link hy2" href="/api/subscribe?token={}&proto=hy2&format=clash" target="_blank">导出 Hysteria 2 (Clash)</a>
+            <a class="sub-link" style="background:#0d9488;" href="/api/subscribe?token={}&proto=socks&format=clash" target="_blank">导出 SOCKS5 (Clash)</a>
         </div>
     </div>
 
     <div class="notice">
-        <strong>⚡ 流量防护机制生效中：</strong> 系统采用轻量毫秒探针 + VPNGate 官方原生带宽同步方案，<strong>严禁无意义的跑满大文件测速</strong>，每月系统维护流量开销 &lt; 300MB，100% 保护您的 4TB 流量额度安全。
+        <strong>⚡ 多场景直连与流量保护：</strong> 墙内走 Reality/Hy2 伪装；墙外机器与本机 Docker 容器直接走 <code>127.0.0.1:{}</code> (SOCKS5/HTTP) 零加密极速直达；月度探活开销 &lt; 300MB，100% 保护 4TB 流量。
     </div>
 
     <div class="stats">
         <div class="card">
-            <h3>VLESS-Reality 入站</h3>
-            <p>TCP {} (微软/苹果 1:1 双伪装)</p>
+            <h3>VLESS-Reality (墙内)</h3>
+            <p>TCP {} (微软/苹果双伪装)</p>
         </div>
         <div class="card">
-            <h3>Hysteria 2 入站</h3>
+            <h3>Hysteria 2 (强抗丢包)</h3>
             <p>UDP {} ({})</p>
+        </div>
+        <div class="card">
+            <h3>纯净 SOCKS5/HTTP (墙外/Docker)</h3>
+            <p>TCP {} (前缀: {})</p>
         </div>
         <div class="card">
             <h3>出口住宅 IP 调度池</h3>
@@ -198,6 +210,7 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
                 <th>综合评分</th>
                 <th>Reality UUID 前缀</th>
                 <th>Hy2 认证 Token</th>
+                <th>SOCKS5 认证账号</th>
             </tr>
         </thead>
         <tbody>
@@ -206,7 +219,7 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
     </table>
 </body>
 </html>"#,
-        state.sub_token, state.sub_token, state.reality_port, state.hy2_port, state.domain, total_count, rows
+        state.sub_token, state.sub_token, state.sub_token, state.socks_port, state.reality_port, state.hy2_port, state.domain, state.socks_port, state.user_prefix, total_count, rows
     );
 
     Html(html)
@@ -273,6 +286,21 @@ async fn subscribe_handler(
     skip-cert-verify: true"#,
             name, state.domain, state.hy2_port, pass, state.domain
         ));
+    } else if proto == "socks" {
+        let name = "⚡ VPS 原生直连出口 (SOCKS5)".to_string();
+        let user = format!("{}_direct", state.user_prefix);
+        let pass = format!("pass_{}_direct", &state.sub_token[..8.min(state.sub_token.len())]);
+        proxy_names.push(format!("      - \"{}\"", name));
+        proxies.push(format!(
+            r#"  - name: "{}"
+    type: socks5
+    server: {}
+    port: {}
+    username: "{}"
+    password: "{}"
+    udp: true"#,
+            name, state.server_ip, state.socks_port, user, pass
+        ));
     } else {
         let name = "⚡ VPS 原生直连出口 (Reality)".to_string();
         let direct_uuid = format!("{}-{}-4000-8000-000000000000", prefix, mid);
@@ -312,6 +340,7 @@ async fn subscribe_handler(
         let node_idx = idx + 1;
         let uuid = format!("{}-{}-4000-8000-{:012x}", prefix, mid, node_idx);
         let password = format!("pass_{}_{:04}", &state.sub_token[..8.min(state.sub_token.len())], node_idx);
+        let user_name = format!("{}_{}", state.user_prefix, node_idx);
 
         if proto == "hy2" {
             let name = format!(
@@ -328,6 +357,22 @@ async fn subscribe_handler(
     sni: {}
     skip-cert-verify: true"#,
                 name, state.domain, state.hy2_port, password, state.domain
+            ));
+        } else if proto == "socks" {
+            let name = format!(
+                "[{}] #{} 住宅IP - {}ms (SOCKS5)",
+                node.country_short, node_idx, node.latency_ms.unwrap_or(0)
+            );
+            proxy_names.push(format!("      - \"{}\"", name));
+            proxies.push(format!(
+                r#"  - name: "{}"
+    type: socks5
+    server: {}
+    port: {}
+    username: "{}"
+    password: "{}"
+    udp: true"#,
+                name, state.server_ip, state.socks_port, user_name, password
             ));
         } else {
             // 微软 (Microsoft) 与 苹果 (Apple) 各占一半，交替轮询伪装

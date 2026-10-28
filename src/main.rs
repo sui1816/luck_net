@@ -46,7 +46,15 @@ async fn main() -> Result<(), anyhow::Error> {
     let hy2_port: u16 = env::var("HY2_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(443);
+        .unwrap_or(9443);
+    let socks_port: u16 = env::var("SOCKS_PORT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10800);
+
+    // 用户名前缀防扫描配置 (可部署时自由定制，防止公网猜测探测)
+    let user_prefix = env::var("USER_PREFIX")
+        .unwrap_or_else(|_| "lucknet".to_string());
 
     // Reality 配置 (免域名，借用微软)
     let reality_private_key = env::var("REALITY_PRIVATE_KEY")
@@ -77,12 +85,14 @@ async fn main() -> Result<(), anyhow::Error> {
         &domain,
         reality_port,
         hy2_port,
+        socks_port,
         &reality_private_key,
         &reality_short_id,
         &reality_server_name,
         &cert_path,
         &key_path,
         &sub_token,
+        &user_prefix,
     ));
 
     // 生成初始化 sing-box 双栈配置文件
@@ -145,10 +155,12 @@ async fn main() -> Result<(), anyhow::Error> {
         server_ip,
         reality_port,
         hy2_port,
+        socks_port,
         reality_pub_key,
         reality_short_id,
         reality_server_name,
         sub_token: sub_token.clone(),
+        user_prefix: user_prefix.clone(),
     };
 
     let app = web::create_router(app_state);
@@ -156,6 +168,7 @@ async fn main() -> Result<(), anyhow::Error> {
     info!("Web 控制台与客户端订阅接口已监听在: http://0.0.0.0:{}", web_port);
     info!("Reality 订阅: http://0.0.0.0:{}/api/subscribe?token={}&proto=reality&format=clash", web_port, sub_token);
     info!("Hysteria2 订阅: http://0.0.0.0:{}/api/subscribe?token={}&proto=hy2&format=clash", web_port, sub_token);
+    info!("SOCKS5 订阅: http://0.0.0.0:{}/api/subscribe?token={}&proto=socks&format=clash", web_port, sub_token);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

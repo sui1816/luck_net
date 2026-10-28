@@ -148,16 +148,24 @@ HY2_PORT=${HY2_PORT:-9443}
 read -r -p "5. 请输入 Reality 监听端口 (TCP) [默认 8443]: " REALITY_PORT
 REALITY_PORT=${REALITY_PORT:-8443}
 
-read -r -p "6. 请输入 Web 控制台与订阅内部端口 [默认 28080]: " WEB_PORT
+read -r -p "6. 请输入纯净 SOCKS5/HTTP 监听端口 (墙外/Docker直连) [默认 10800]: " SOCKS_PORT
+SOCKS_PORT=${SOCKS_PORT:-10800}
+
+read -r -p "7. 请输入用户名前缀 (防止公网猜测探测, 如 user_xxx) [默认 lucknet]: " USER_PREFIX
+USER_PREFIX=${USER_PREFIX:-lucknet}
+
+read -r -p "8. 请输入 Web 控制台与订阅内部端口 [默认 28080]: " WEB_PORT
 WEB_PORT=${WEB_PORT:-28080}
 
 echo -e "\n${BLUE}---------------- 输入配置确认 ----------------${PLAIN}"
 echo -e "  VPS 公网 IP:     ${GREEN}${SERVER_IP}${PLAIN}"
 echo -e "  硬件规格:        ${GREEN}${CPU_CORES}核 / ${MEM_TOTAL_MB}MB${PLAIN}"
 echo -e "  热备落地节点数:  ${GREEN}${MAX_HOT_TUNNELS} 个${PLAIN} (自动探活与保持活跃)"
+echo -e "  用户名前缀:      ${GREEN}${USER_PREFIX}${PLAIN}_* (专属私有前缀防扫描)"
 echo -e "  Hy2 节点域名:    ${GREEN}${HY2_DOMAIN}${PLAIN} (UDP ${HY2_PORT})"
-echo -e "  Web / 订阅域名:  ${GREEN}${SUB_DOMAIN}${PLAIN} (TCP 反代)"
 echo -e "  Reality 端口:    ${GREEN}${REALITY_PORT}${PLAIN} (TCP, 借用微软/苹果免域名)"
+echo -e "  SOCKS5 直连端口: ${GREEN}${SOCKS_PORT}${PLAIN} (TCP, 墙外互联/Docker)"
+echo -e "  Web / 订阅域名:  ${GREEN}${SUB_DOMAIN}${PLAIN} (TCP 反代)"
 echo -e "  Web 内部端口:    ${GREEN}${WEB_PORT}${PLAIN}"
 echo -e "${BLUE}----------------------------------------------${PLAIN}"
 
@@ -207,6 +215,7 @@ SERVER_IP=${SERVER_IP}
 BASE_DOMAIN=${HY2_DOMAIN}
 SUB_DOMAIN=${SUB_DOMAIN}
 SUB_TOKEN=${SUB_TOKEN}
+USER_PREFIX=${USER_PREFIX}
 WEB_PORT=${WEB_PORT}
 
 # 热备常驻落地节点数 (按硬件配置自适应)
@@ -223,6 +232,9 @@ REALITY_PUB_KEY=${REALITY_PUB_KEY}
 HY2_PORT=${HY2_PORT}
 HY2_CERT_PATH=/etc/sing-box/cert.pem
 HY2_KEY_PATH=/etc/sing-box/key.pem
+
+# 纯净 SOCKS5 / HTTP 直连端口 (供墙外机器与本机 Docker 容器互联)
+SOCKS_PORT=${SOCKS_PORT}
 EOF
 
 echo -e "${GREEN}.env 配置文件写入成功！${PLAIN}"
@@ -284,5 +296,10 @@ echo -e "  - VLESS-Reality 订阅:   ${GREEN}http://${SERVER_IP}:${WEB_PORT}/api
 echo -e "                          ${GREEN}https://${SUB_DOMAIN}/api/subscribe?token=${SUB_TOKEN}&proto=reality&format=clash${PLAIN}"
 echo -e "  - Hysteria 2 订阅:      ${GREEN}http://${SERVER_IP}:${WEB_PORT}/api/subscribe?token=${SUB_TOKEN}&proto=hy2&format=clash${PLAIN}"
 echo -e "                          ${GREEN}https://${SUB_DOMAIN}/api/subscribe?token=${SUB_TOKEN}&proto=hy2&format=clash${PLAIN}"
+echo -e "  - SOCKS5/HTTP 直连订阅: ${GREEN}http://${SERVER_IP}:${WEB_PORT}/api/subscribe?token=${SUB_TOKEN}&proto=socks&format=clash${PLAIN}"
+echo -e "                          ${GREEN}https://${SUB_DOMAIN}/api/subscribe?token=${SUB_TOKEN}&proto=socks&format=clash${PLAIN}"
+echo -e "\n${BLUE}【本机 Docker 其他 App / 脚本借道访问方式】${PLAIN}"
+echo -e "  - 统一端口接入:         ${YELLOW}socks5://${USER_PREFIX}_1:密码@127.0.0.1:${SOCKS_PORT}${PLAIN}"
+echo -e "  - 直通出口 1:           ${YELLOW}socks5://127.0.0.1:55001${PLAIN}"
 echo -e "\n${YELLOW}提示：宿主机 Nginx 反代配置参考已保存在: ${NGINX_SNIPPET_FILE}${PLAIN}"
 echo -e "${BLUE}================================================================${PLAIN}"

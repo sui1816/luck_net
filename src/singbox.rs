@@ -10,12 +10,14 @@ pub struct SingBoxConfigManager {
     domain: String,
     reality_port: u16,
     hy2_port: u16,
+    socks_port: u16,
     reality_private_key: String,
     reality_short_id: String,
     reality_server_name: String,
     cert_path: String,
     key_path: String,
     sub_token: String,
+    user_prefix: String,
 }
 
 impl SingBoxConfigManager {
@@ -24,24 +26,28 @@ impl SingBoxConfigManager {
         domain: &str,
         reality_port: u16,
         hy2_port: u16,
+        socks_port: u16,
         reality_private_key: &str,
         reality_short_id: &str,
         reality_server_name: &str,
         cert_path: &str,
         key_path: &str,
         sub_token: &str,
+        user_prefix: &str,
     ) -> Self {
         Self {
             config_path: config_path.to_string(),
             domain: domain.to_string(),
             reality_port,
             hy2_port,
+            socks_port,
             reality_private_key: reality_private_key.to_string(),
             reality_short_id: reality_short_id.to_string(),
             reality_server_name: reality_server_name.to_string(),
             cert_path: cert_path.to_string(),
             key_path: key_path.to_string(),
             sub_token: sub_token.to_string(),
+            user_prefix: user_prefix.to_string(),
         }
     }
 
@@ -55,6 +61,7 @@ impl SingBoxConfigManager {
         let total_users = active_count.clamp(1, 5000);
         let mut reality_users = Vec::new();
         let mut hy2_users = Vec::new();
+        let mut socks_users = Vec::new();
 
         // 提取 sub_token 的前 8 位和前 12 位作为盐值，生成当前部署独有的强随机 UUID
         let token_clean: String = self.sub_token.chars().filter(|c| c.is_ascii_hexdigit()).collect();
@@ -62,32 +69,42 @@ impl SingBoxConfigManager {
         let mid = if token_clean.len() >= 12 { &token_clean[8..12] } else { "e5f6" };
 
         // 1. 直连用户 (user_direct)
+        let direct_user = format!("{}_direct", self.user_prefix);
         let direct_uuid = format!("{}-{}-4000-8000-000000000000", prefix, mid);
         let direct_pass = format!("pass_{}_direct", &self.sub_token[..8.min(self.sub_token.len())]);
 
         reality_users.push(json!({
-            "name": "user_direct",
+            "name": &direct_user,
             "uuid": direct_uuid
         }));
         hy2_users.push(json!({
-            "name": "user_direct",
+            "name": &direct_user,
+            "password": direct_pass
+        }));
+        socks_users.push(json!({
+            "username": &direct_user,
             "password": direct_pass
         }));
 
         // 2. 批量生成 1 ~ N 个住宅出口对应的专属随机用户
         for i in 1..=total_users {
-            let user_name = format!("user_node_{}", i);
+            let user_name = format!("{}_{}", self.user_prefix, i);
             // 结合部署 token 生成全网唯一的私有 UUID，杜绝公开碰撞
             let uuid = format!("{}-{}-4000-8000-{:012x}", prefix, mid, i);
             let password = format!("pass_{}_{:04}", &self.sub_token[..8.min(self.sub_token.len())], i);
 
             reality_users.push(json!({
-                "name": user_name,
+                "name": &user_name,
                 "uuid": uuid
             }));
 
             hy2_users.push(json!({
-                "name": user_name,
+                "name": &user_name,
+                "password": password.clone()
+            }));
+
+            socks_users.push(json!({
+                "username": user_name,
                 "password": password
             }));
         }
@@ -117,7 +134,7 @@ impl SingBoxConfigManager {
             }
         }));
 
-        // (2) Hysteria 2 入站 (UDP 443, 绑定域名, 抗弱网丢包极速)
+        // (2) Hysteria 2 入站 (UDP 9443 等, 绑定域名, 抗弱网丢包极速)
         let mut hy2_inbound = json!({
             "type": "hysteria2",
             "tag": "in_hy2",
@@ -137,6 +154,15 @@ impl SingBoxConfigManager {
         }
 
         inbounds.push(hy2_inbound);
+
+        // (3) 纯净高速 SOCKS5 / HTTP 认证入站 (供墙外机器免过墙直连 + 本机 Docker 容器统一走代理)
+        inbounds.push(json!({
+            "type": "mixed",
+            "tag": "in_mixed_socks",
+            "listen": "::",
+            "listen_port": self.socks_port,
+            "users": socks_users
+        }));
 
         // 4. 构建 Outbounds 出站列表
         let mut outbounds = Vec::new();
@@ -162,13 +188,13 @@ impl SingBoxConfigManager {
 
         // (1) 直连用户路由
         rules.push(json!({
-            "user": ["user_direct"],
+            "user": [format!("{}_direct", self.user_prefix)],
             "outbound": "out_direct"
         }));
 
         // (2) 每个 user_node_X 严格路由至对应的 out_socks_Y
         for i in 1..=total_users {
-            let user_name = format!("user_node_{}", i);
+            let user_name = format!("{}_{}", self.user_prefix, i);
             let out_port = OUTBOUND_START_PORT + (i as u16) - 1;
             rules.push(json!({
                 "user": [user_name],
