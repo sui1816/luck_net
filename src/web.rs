@@ -20,6 +20,7 @@ pub struct AppState {
     pub reality_pub_key: String,
     pub reality_short_id: String,
     pub reality_server_name: String,
+    pub sub_token: String,
 }
 
 #[derive(Deserialize)]
@@ -27,7 +28,7 @@ pub struct SubQuery {
     pub format: Option<String>,
     pub proto: Option<String>, // reality 或 hy2
     pub limit: Option<usize>,
-    pub _token: Option<String>,
+    pub token: Option<String>,
 }
 
 pub fn create_router(state: AppState) -> Router {
@@ -43,6 +44,10 @@ pub fn create_router(state: AppState) -> Router {
 async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
     let mappings = state.scheduler.get_mappings_snapshot(100);
     let total_count = state.scheduler.mappings.len();
+
+    let token_clean: String = state.sub_token.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    let prefix = if token_clean.len() >= 8 { &token_clean[..8] } else { "a1b2c3d4" };
+    let mid = if token_clean.len() >= 12 { &token_clean[8..12] } else { "e5f6" };
 
     let mut rows = String::new();
     for (idx, m) in mappings.iter().enumerate() {
@@ -68,8 +73,8 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
                 format!("{:.1} Mbps", speed_mbps),
                 format!("{} ms", node.latency_ms.unwrap_or(0)),
                 format!("{:.1}", node.dynamic_score),
-                format!("d2a02306-6945-4e3e-bf64-{:012x}", idx + 1),
-                format!("pass_node_{:04}", idx + 1),
+                format!("{}-{}-4000-8000-{:012x}", prefix, mid, idx + 1),
+                format!("pass_{}_{:04}", &state.sub_token[..8.min(state.sub_token.len())], idx + 1),
             )
         } else if m.is_direct {
             (
@@ -79,8 +84,8 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
                 "1000.0 Mbps".to_string(),
                 "0 ms".to_string(),
                 "100.0".to_string(),
-                "b831381d-6324-4d53-ad4f-8cda48b30811".to_string(),
-                "pass_direct_token_123".to_string(),
+                format!("{}-{}-4000-8000-000000000000", prefix, mid),
+                format!("pass_{}_direct", &state.sub_token[..8.min(state.sub_token.len())]),
             )
         } else {
             (
@@ -155,8 +160,8 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
     <div class="header">
         <h1>🌐 GateMatrix 双栈出口代理矩阵</h1>
         <div class="links">
-            <a class="sub-link" href="/api/subscribe?proto=reality&format=clash" target="_blank">导出 Reality (Clash)</a>
-            <a class="sub-link hy2" href="/api/subscribe?proto=hy2&format=clash" target="_blank">导出 Hysteria 2 (Clash)</a>
+            <a class="sub-link" href="/api/subscribe?token={}&proto=reality&format=clash" target="_blank">导出 Reality (Clash)</a>
+            <a class="sub-link hy2" href="/api/subscribe?token={}&proto=hy2&format=clash" target="_blank">导出 Hysteria 2 (Clash)</a>
         </div>
     </div>
 
@@ -201,7 +206,7 @@ async fn dashboard_handler(State(state): State<AppState>) -> Html<String> {
     </table>
 </body>
 </html>"#,
-        state.reality_port, state.hy2_port, state.domain, total_count, rows
+        state.sub_token, state.sub_token, state.reality_port, state.hy2_port, state.domain, total_count, rows
     );
 
     Html(html)
@@ -220,14 +225,35 @@ async fn nodes_api_handler(State(state): State<AppState>) -> Json<serde_json::Va
     }))
 }
 
-/// 客户端订阅生成 (支持 Reality 与 Hy2 分别导出或混合导出)
+/// 客户端订阅生成 (支持 Reality 与 Hy2 分别导出或混合导出，内置 Token 安全校验)
 async fn subscribe_handler(
     State(state): State<AppState>,
     Query(query): Query<SubQuery>,
 ) -> Response {
+    // 安全鉴权：校验 token 参数是否与部署设置的 SUB_TOKEN 一致
+    if let Some(token) = &query.token {
+        if token != &state.sub_token {
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                "Unauthorized: Invalid subscription token",
+            )
+                .into_response();
+        }
+    } else {
+        return (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "Unauthorized: Missing subscription token (?token=YOUR_TOKEN)",
+        )
+            .into_response();
+    }
+
     let limit = query.limit.unwrap_or(35); // 默认 35 条最优热池节点，杜绝 5000 条臃肿卡死
     let list = state.scheduler.get_mappings_snapshot(limit);
     let proto = query.proto.unwrap_or_else(|| "reality".to_string());
+
+    let token_clean: String = state.sub_token.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    let prefix = if token_clean.len() >= 8 { &token_clean[..8] } else { "a1b2c3d4" };
+    let mid = if token_clean.len() >= 12 { &token_clean[8..12] } else { "e5f6" };
 
     let mut proxies = Vec::new();
     let mut proxy_names = Vec::new();
@@ -235,26 +261,28 @@ async fn subscribe_handler(
     // 1. 直连节点
     if proto == "hy2" {
         let name = "⚡ VPS 原生直连出口 (Hy2)".to_string();
+        let pass = format!("pass_{}_direct", &state.sub_token[..8.min(state.sub_token.len())]);
         proxy_names.push(format!("      - \"{}\"", name));
         proxies.push(format!(
             r#"  - name: "{}"
     type: hysteria2
     server: {}
     port: {}
-    password: "pass_direct_token_123"
+    password: "{}"
     sni: {}
     skip-cert-verify: true"#,
-            name, state.domain, state.hy2_port, state.domain
+            name, state.domain, state.hy2_port, pass, state.domain
         ));
     } else {
         let name = "⚡ VPS 原生直连出口 (Reality)".to_string();
+        let direct_uuid = format!("{}-{}-4000-8000-000000000000", prefix, mid);
         proxy_names.push(format!("      - \"{}\"", name));
         proxies.push(format!(
             r#"  - name: "{}"
     type: vless
     server: {}
     port: {}
-    uuid: b831381d-6324-4d53-ad4f-8cda48b30811
+    uuid: {}
     network: tcp
     tls: true
     udp: true
@@ -267,6 +295,7 @@ async fn subscribe_handler(
             name,
             state.server_ip,
             state.reality_port,
+            direct_uuid,
             state.reality_server_name,
             state.reality_pub_key,
             state.reality_short_id
@@ -281,8 +310,8 @@ async fn subscribe_handler(
         };
 
         let node_idx = idx + 1;
-        let uuid = format!("d2a02306-6945-4e3e-bf64-{:012x}", node_idx);
-        let password = format!("pass_node_{:04}", node_idx);
+        let uuid = format!("{}-{}-4000-8000-{:012x}", prefix, mid, node_idx);
+        let password = format!("pass_{}_{:04}", &state.sub_token[..8.min(state.sub_token.len())], node_idx);
 
         if proto == "hy2" {
             let name = format!(

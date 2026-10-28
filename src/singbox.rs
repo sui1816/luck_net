@@ -15,6 +15,7 @@ pub struct SingBoxConfigManager {
     reality_server_name: String,
     cert_path: String,
     key_path: String,
+    sub_token: String,
 }
 
 impl SingBoxConfigManager {
@@ -28,6 +29,7 @@ impl SingBoxConfigManager {
         reality_server_name: &str,
         cert_path: &str,
         key_path: &str,
+        sub_token: &str,
     ) -> Self {
         Self {
             config_path: config_path.to_string(),
@@ -39,6 +41,7 @@ impl SingBoxConfigManager {
             reality_server_name: reality_server_name.to_string(),
             cert_path: cert_path.to_string(),
             key_path: key_path.to_string(),
+            sub_token: sub_token.to_string(),
         }
     }
 
@@ -53,22 +56,30 @@ impl SingBoxConfigManager {
         let mut reality_users = Vec::new();
         let mut hy2_users = Vec::new();
 
+        // 提取 sub_token 的前 8 位和前 12 位作为盐值，生成当前部署独有的强随机 UUID
+        let token_clean: String = self.sub_token.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+        let prefix = if token_clean.len() >= 8 { &token_clean[..8] } else { "a1b2c3d4" };
+        let mid = if token_clean.len() >= 12 { &token_clean[8..12] } else { "e5f6" };
+
         // 1. 直连用户 (user_direct)
+        let direct_uuid = format!("{}-{}-4000-8000-000000000000", prefix, mid);
+        let direct_pass = format!("pass_{}_direct", &self.sub_token[..8.min(self.sub_token.len())]);
+
         reality_users.push(json!({
             "name": "user_direct",
-            "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811"
+            "uuid": direct_uuid
         }));
         hy2_users.push(json!({
             "name": "user_direct",
-            "password": "pass_direct_token_123"
+            "password": direct_pass
         }));
 
-        // 2. 批量生成 1 ~ N 个住宅出口对应的用户
+        // 2. 批量生成 1 ~ N 个住宅出口对应的专属随机用户
         for i in 1..=total_users {
             let user_name = format!("user_node_{}", i);
-            // 构造固定规律的确定性 UUID
-            let uuid = format!("d2a02306-6945-4e3e-bf64-{:012x}", i);
-            let password = format!("pass_node_{:04}", i);
+            // 结合部署 token 生成全网唯一的私有 UUID，杜绝公开碰撞
+            let uuid = format!("{}-{}-4000-8000-{:012x}", prefix, mid, i);
+            let password = format!("pass_{}_{:04}", &self.sub_token[..8.min(self.sub_token.len())], i);
 
             reality_users.push(json!({
                 "name": user_name,

@@ -22,6 +22,7 @@ services:
       - SERVER_IP=${SERVER_IP:-127.0.0.1}
       - BASE_DOMAIN=${BASE_DOMAIN:-vpn.yourdomain.com}
       - SUB_DOMAIN=${SUB_DOMAIN:-sub.yourdomain.com}
+      - SUB_TOKEN=${SUB_TOKEN:-lucknet_secret_token}
       - WEB_PORT=${WEB_PORT:-28080}
       - REALITY_PORT=${REALITY_PORT:-8443}
       - REALITY_SERVER_NAME=${REALITY_SERVER_NAME:-www.microsoft.com}

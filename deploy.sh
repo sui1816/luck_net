@@ -161,6 +161,16 @@ echo -e "  Reality 端口:    ${GREEN}${REALITY_PORT}${PLAIN} (TCP, 借用微软
 echo -e "  Web 内部端口:    ${GREEN}${WEB_PORT}${PLAIN}"
 echo -e "${BLUE}----------------------------------------------${PLAIN}"
 
+# 3.5 自动生成或保持独立的专属订阅 Token (UUID 随机生成)
+echo -e "\n正在生成当前部署独有的专属订阅 Token 与随机 UUID 根基..."
+if [ -f ".env" ] && grep -q "SUB_TOKEN=" .env; then
+    SUB_TOKEN=$(grep "SUB_TOKEN=" .env | cut -d '=' -f2)
+fi
+if [ -z "${SUB_TOKEN}" ]; then
+    SUB_TOKEN=$(cat /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '-' || head -c 16 /dev/urandom | xxd -p 2>/dev/null || echo "lucknet_$(date +%s)")
+fi
+echo -e "专属安全订阅 Token: ${GREEN}${SUB_TOKEN}${PLAIN}"
+
 # 4. 生成 sing-box 官方标准的 Reality 密钥对 (x25519)
 echo -e "\n正在通过 sing-box 生成标准的 Reality x25519 密钥对与 ShortId..."
 REALITY_SHORT_ID=$(head -c 8 /dev/urandom | xxd -p 2>/dev/null || cat /proc/sys/kernel/random/uuid | tr -d '-' | cut -c 1-16)
@@ -196,6 +206,7 @@ cat <<EOF > .env
 SERVER_IP=${SERVER_IP}
 BASE_DOMAIN=${HY2_DOMAIN}
 SUB_DOMAIN=${SUB_DOMAIN}
+SUB_TOKEN=${SUB_TOKEN}
 WEB_PORT=${WEB_PORT}
 
 # 热备常驻落地节点数 (按硬件配置自适应)
@@ -268,10 +279,10 @@ echo -e "${GREEN}                 GateMatrix 部署成功，服务已启动！  
 echo -e "${GREEN}================================================================${PLAIN}"
 echo -e "Web 控制台本地访问地址:   ${YELLOW}http://${SERVER_IP}:${WEB_PORT}/${PLAIN}"
 echo -e "Web 控制台域名访问地址:   ${YELLOW}https://${SUB_DOMAIN}/${PLAIN}"
-echo -e "\n${BLUE}【客户端订阅获取地址】${PLAIN}"
-echo -e "  - VLESS-Reality 订阅:   ${GREEN}http://${SERVER_IP}:${WEB_PORT}/api/subscribe?proto=reality&format=clash${PLAIN}"
-echo -e "                          ${GREEN}https://${SUB_DOMAIN}/api/subscribe?proto=reality&format=clash${PLAIN}"
-echo -e "  - Hysteria 2 订阅:      ${GREEN}http://${SERVER_IP}:${WEB_PORT}/api/subscribe?proto=hy2&format=clash${PLAIN}"
-echo -e "                          ${GREEN}https://${SUB_DOMAIN}/api/subscribe?proto=hy2&format=clash${PLAIN}"
+echo -e "\n${BLUE}【客户端专属安全订阅地址 (已加随机鉴权 Token，防扫描防盗用)】${PLAIN}"
+echo -e "  - VLESS-Reality 订阅:   ${GREEN}http://${SERVER_IP}:${WEB_PORT}/api/subscribe?token=${SUB_TOKEN}&proto=reality&format=clash${PLAIN}"
+echo -e "                          ${GREEN}https://${SUB_DOMAIN}/api/subscribe?token=${SUB_TOKEN}&proto=reality&format=clash${PLAIN}"
+echo -e "  - Hysteria 2 订阅:      ${GREEN}http://${SERVER_IP}:${WEB_PORT}/api/subscribe?token=${SUB_TOKEN}&proto=hy2&format=clash${PLAIN}"
+echo -e "                          ${GREEN}https://${SUB_DOMAIN}/api/subscribe?token=${SUB_TOKEN}&proto=hy2&format=clash${PLAIN}"
 echo -e "\n${YELLOW}提示：宿主机 Nginx 反代配置参考已保存在: ${NGINX_SNIPPET_FILE}${PLAIN}"
 echo -e "${BLUE}================================================================${PLAIN}"

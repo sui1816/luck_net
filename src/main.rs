@@ -64,6 +64,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let cert_path = env::var("HY2_CERT_PATH").unwrap_or_else(|_| "/etc/sing-box/cert.pem".to_string());
     let key_path = env::var("HY2_KEY_PATH").unwrap_or_else(|_| "/etc/sing-box/key.pem".to_string());
 
+    let sub_token = env::var("SUB_TOKEN")
+        .unwrap_or_else(|_| "lucknet_secret_token".to_string());
+
     let singbox_conf_path = env::var("SINGBOX_CONF_PATH")
         .unwrap_or_else(|_| "/etc/sing-box/config.json".to_string());
 
@@ -79,6 +82,7 @@ async fn main() -> Result<(), anyhow::Error> {
         &reality_server_name,
         &cert_path,
         &key_path,
+        &sub_token,
     ));
 
     // 生成初始化 sing-box 双栈配置文件
@@ -144,13 +148,14 @@ async fn main() -> Result<(), anyhow::Error> {
         reality_pub_key,
         reality_short_id,
         reality_server_name,
+        sub_token: sub_token.clone(),
     };
 
     let app = web::create_router(app_state);
     let addr = SocketAddr::from(([0, 0, 0, 0], web_port));
     info!("Web 控制台与客户端订阅接口已监听在: http://0.0.0.0:{}", web_port);
-    info!("Reality 订阅: http://0.0.0.0:{}/api/subscribe?proto=reality&format=clash", web_port);
-    info!("Hysteria2 订阅: http://0.0.0.0:{}/api/subscribe?proto=hy2&format=clash", web_port);
+    info!("Reality 订阅: http://0.0.0.0:{}/api/subscribe?token={}&proto=reality&format=clash", web_port, sub_token);
+    info!("Hysteria2 订阅: http://0.0.0.0:{}/api/subscribe?token={}&proto=hy2&format=clash", web_port, sub_token);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
