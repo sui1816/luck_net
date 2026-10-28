@@ -32,12 +32,34 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-# 2. 检测并获取 VPS 公网 IP
+# 1.5 自动更新/拉取 GitHub 最新代码
+if [ -d ".git" ]; then
+    echo -e "${YELLOW}正在检测并同步 GitHub 最新代码...${PLAIN}"
+    git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
+fi
+
+# 2. 检测并获取 VPS 硬件配置与公网 IP
 SERVER_IP=$(curl -s4m 5 https://api.ipify.org || curl -s4m 5 https://ifconfig.me || curl -s4m 5 https://icanhazip.com || echo "127.0.0.1")
+CPU_CORES=$(nproc 2>/dev/null || echo 1)
+MEM_TOTAL_MB=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 1024)
+
+# 根据硬件自动推荐热备节点数 (1核1G推荐15~20个，2核2G以上推荐35~50个)
+if [ "${MEM_TOTAL_MB}" -le 1200 ]; then
+    DEFAULT_HOT_NODES=15
+    HW_DESC="1核1G或以下轻量规格"
+elif [ "${MEM_TOTAL_MB}" -le 2500 ]; then
+    DEFAULT_HOT_NODES=35
+    HW_DESC="2核2G标准规格"
+else
+    DEFAULT_HOT_NODES=50
+    HW_DESC="高配规格(>=4G)"
+fi
+
+echo -e "检测到本机硬件: ${GREEN}${CPU_CORES} 核 CPU / ${MEM_TOTAL_MB} MB 内存 (${HW_DESC})${PLAIN}"
 echo -e "检测到本机公网 IP: ${GREEN}${SERVER_IP}${PLAIN}"
 
 # 3. 交互式配置输入
-echo -e "\n${YELLOW}--- 请输入域名配置 (建议将 1 个主域名解析出 2 个二级子域名到本机 IP) ---${PLAIN}"
+echo -e "\n${YELLOW}--- 请输入域名与热备节点配置 ---${PLAIN}"
 
 read -r -p "1. 请输入 Hysteria 2 节点连接域名 (如: hy2.yourdomain.com): " HY2_DOMAIN
 while [ -z "${HY2_DOMAIN}" ]; do
@@ -49,14 +71,20 @@ while [ -z "${SUB_DOMAIN}" ]; do
     read -r -p "域名不能为空，请重新输入 Web 与订阅域名: " SUB_DOMAIN
 done
 
-read -r -p "3. 请输入 Reality 监听端口 [默认 8443]: " REALITY_PORT
+echo -e "\n${BLUE}推荐热备节点数：${HW_DESC} 推荐设置为 ${DEFAULT_HOT_NODES} 个 (降低内存占用并杜绝卡死)${PLAIN}"
+read -r -p "3. 请输入热备常驻落地住宅节点数量 [默认 ${DEFAULT_HOT_NODES}]: " MAX_HOT_TUNNELS
+MAX_HOT_TUNNELS=${MAX_HOT_TUNNELS:-$DEFAULT_HOT_NODES}
+
+read -r -p "4. 请输入 Reality 监听端口 [默认 8443]: " REALITY_PORT
 REALITY_PORT=${REALITY_PORT:-8443}
 
-read -r -p "4. 请输入 Web 控制台与订阅内部端口 [默认 28080]: " WEB_PORT
+read -r -p "5. 请输入 Web 控制台与订阅内部端口 [默认 28080]: " WEB_PORT
 WEB_PORT=${WEB_PORT:-28080}
 
 echo -e "\n${BLUE}---------------- 输入配置确认 ----------------${PLAIN}"
 echo -e "  VPS 公网 IP:     ${GREEN}${SERVER_IP}${PLAIN}"
+echo -e "  硬件规格:        ${GREEN}${CPU_CORES}核 / ${MEM_TOTAL_MB}MB${PLAIN}"
+echo -e "  热备落地节点数:  ${GREEN}${MAX_HOT_TUNNELS} 个${PLAIN} (自动探活与保持活跃)"
 echo -e "  Hy2 节点域名:    ${GREEN}${HY2_DOMAIN}${PLAIN} (UDP 443)"
 echo -e "  Web / 订阅域名:  ${GREEN}${SUB_DOMAIN}${PLAIN} (TCP 反代)"
 echo -e "  Reality 端口:    ${GREEN}${REALITY_PORT}${PLAIN} (TCP, 借用微软/苹果免域名)"
@@ -92,6 +120,9 @@ SERVER_IP=${SERVER_IP}
 BASE_DOMAIN=${HY2_DOMAIN}
 SUB_DOMAIN=${SUB_DOMAIN}
 WEB_PORT=${WEB_PORT}
+
+# 热备常驻落地节点数 (按硬件配置自适应)
+MAX_HOT_TUNNELS=${MAX_HOT_TUNNELS}
 
 # VLESS-Reality 配置 (微软 www.microsoft.com 与 苹果 gateway.icloud.com 各占一半)
 REALITY_PORT=${REALITY_PORT}

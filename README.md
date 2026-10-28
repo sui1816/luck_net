@@ -23,20 +23,25 @@
 
 ---
 
-## 🚀 极简交互式部署 (推荐)
+## 🚀 极简聚合一键部署 (推荐)
 
-只需将本项目上传至 VPS 任意目录（如 `/opt/luck_net`），运行交互脚本：
+无论是首次安装还是重新配置，在 VPS 上直接粘贴运行单行命令：
 
 ```bash
-cd /opt/luck_net
-chmod +x deploy.sh
-bash deploy.sh
+bash <(curl -sL https://raw.githubusercontent.com/sui1816/luck_net/main/install.sh)
 ```
 
-脚本会交互式引导输入：
-1. **Hysteria 2 节点域名**（如 `hy2.yourdomain.com`，需提前解析 A 记录到 VPS）；
-2. **Web 与订阅域名**（如 `sub.yourdomain.com`，用于查看控制台与导出订阅）；
-3. **Reality 监听端口**（默认 `8443`）。
+如果已经在 `/opt/luck_net` 目录内，直接运行：
+```bash
+cd /opt/luck_net && bash deploy.sh
+```
+（`deploy.sh` 会自动检测并从 GitHub 同步最新代码，无需手动 `git pull`）
+
+### 智能交互引导项：
+1. **Hysteria 2 节点域名**（如 `luckneth2.suizk.com`）；
+2. **Web 与订阅域名**（如 `lucknetsub.suizk.com`）；
+3. **热备常驻落地节点数**（脚本自动检测机器内存：**1核1G智能推荐 15 个，2核2G智能推荐 35 个**，杜绝小内存卡死）；
+4. **Reality 监听端口**（默认 `8443`）。
 
 脚本将自动完成：
 - 随机生成 Reality x25519 密钥对与 ShortId；

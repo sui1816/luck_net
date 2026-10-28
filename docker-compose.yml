@@ -19,8 +19,19 @@ services:
       - ./sing-box-conf:/etc/sing-box
     environment:
       - RUST_LOG=info
+      - SERVER_IP=${SERVER_IP:-127.0.0.1}
       - BASE_DOMAIN=${BASE_DOMAIN:-vpn.yourdomain.com}
+      - SUB_DOMAIN=${SUB_DOMAIN:-sub.yourdomain.com}
       - WEB_PORT=${WEB_PORT:-28080}
+      - REALITY_PORT=${REALITY_PORT:-8443}
+      - REALITY_SERVER_NAME=${REALITY_SERVER_NAME:-www.microsoft.com}
+      - REALITY_SHORT_ID=${REALITY_SHORT_ID}
+      - REALITY_PRIVATE_KEY=${REALITY_PRIVATE_KEY}
+      - REALITY_PUB_KEY=${REALITY_PUB_KEY}
+      - HY2_PORT=${HY2_PORT:-443}
+      - HY2_CERT_PATH=${HY2_CERT_PATH:-/etc/sing-box/cert.pem}
+      - HY2_KEY_PATH=${HY2_KEY_PATH:-/etc/sing-box/key.pem}
+      - MAX_HOT_TUNNELS=${MAX_HOT_TUNNELS:-35}
       - AUTH_USER=${AUTH_USER:-matrix_user}
       - AUTH_PASS=${AUTH_PASS:-matrix_pass_123456}
       - SINGBOX_CONF_PATH=/etc/sing-box/config.json
