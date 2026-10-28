@@ -142,17 +142,20 @@ echo -e "\n${BLUE}推荐热备节点数：${HW_DESC} 推荐设置为 ${DEFAULT_H
 read -r -p "3. 请输入热备常驻落地住宅节点数量 [默认 ${DEFAULT_HOT_NODES}]: " MAX_HOT_TUNNELS
 MAX_HOT_TUNNELS=${MAX_HOT_TUNNELS:-$DEFAULT_HOT_NODES}
 
-read -r -p "4. 请输入 Reality 监听端口 [默认 8443]: " REALITY_PORT
+read -r -p "4. 请输入 Hysteria 2 监听端口 (UDP) [默认 9443]: " HY2_PORT
+HY2_PORT=${HY2_PORT:-9443}
+
+read -r -p "5. 请输入 Reality 监听端口 (TCP) [默认 8443]: " REALITY_PORT
 REALITY_PORT=${REALITY_PORT:-8443}
 
-read -r -p "5. 请输入 Web 控制台与订阅内部端口 [默认 28080]: " WEB_PORT
+read -r -p "6. 请输入 Web 控制台与订阅内部端口 [默认 28080]: " WEB_PORT
 WEB_PORT=${WEB_PORT:-28080}
 
 echo -e "\n${BLUE}---------------- 输入配置确认 ----------------${PLAIN}"
 echo -e "  VPS 公网 IP:     ${GREEN}${SERVER_IP}${PLAIN}"
 echo -e "  硬件规格:        ${GREEN}${CPU_CORES}核 / ${MEM_TOTAL_MB}MB${PLAIN}"
 echo -e "  热备落地节点数:  ${GREEN}${MAX_HOT_TUNNELS} 个${PLAIN} (自动探活与保持活跃)"
-echo -e "  Hy2 节点域名:    ${GREEN}${HY2_DOMAIN}${PLAIN} (UDP 443)"
+echo -e "  Hy2 节点域名:    ${GREEN}${HY2_DOMAIN}${PLAIN} (UDP ${HY2_PORT})"
 echo -e "  Web / 订阅域名:  ${GREEN}${SUB_DOMAIN}${PLAIN} (TCP 反代)"
 echo -e "  Reality 端口:    ${GREEN}${REALITY_PORT}${PLAIN} (TCP, 借用微软/苹果免域名)"
 echo -e "  Web 内部端口:    ${GREEN}${WEB_PORT}${PLAIN}"
@@ -206,7 +209,7 @@ REALITY_PRIVATE_KEY=${REALITY_PRIV_KEY}
 REALITY_PUB_KEY=${REALITY_PUB_KEY}
 
 # Hysteria 2 配置
-HY2_PORT=443
+HY2_PORT=${HY2_PORT}
 HY2_CERT_PATH=/etc/sing-box/cert.pem
 HY2_KEY_PATH=/etc/sing-box/key.pem
 EOF
