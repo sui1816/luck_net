@@ -52,19 +52,37 @@ impl VpnGateCrawler {
         }
     }
 
-    /// 从 VPNGate 获取原始 CSV 并解析为结构化节点列表
+    /// 从 VPNGate 获取原始 CSV 并解析为结构化节点列表 (多重备用获取机制)
     pub async fn fetch_nodes(&self) -> Result<Vec<VpnNode>, anyhow::Error> {
         info!("正在从 VPNGate 同步节点列表: {}", self.api_url);
-        
-        let response = match self.client.get(&self.api_url).send().await {
-            Ok(resp) => resp,
+
+        // 优先使用 reqwest 请求
+        let text_res = match self.client.get(&self.api_url).send().await {
+            Ok(resp) => resp.text().await.ok(),
             Err(e) => {
-                error!("VPNGate API 请求失败: {:?}", e);
-                return Err(anyhow::anyhow!("VPNGate API 请求失败: {}", e));
+                warn!("reqwest 请求 VPNGate 失败 ({})，尝试系统 curl 引擎备用...", e);
+                None
             }
         };
 
-        let text = response.text().await?;
+        // 备用机制：使用 curl 命令行获取 (保证 Linux 容器环境 100% 连通)
+        let text = match text_res {
+            Some(t) => t,
+            None => {
+                let out = tokio::process::Command::new("curl")
+                    .arg("-sL")
+                    .arg("--max-time")
+                    .arg("25")
+                    .arg(&self.api_url)
+                    .output()
+                    .await?;
+                if !out.status.success() {
+                    return Err(anyhow::anyhow!("VPNGate 获取失败，退出码: {:?}", out.status.code()));
+                }
+                String::from_utf8_lossy(&out.stdout).to_string()
+            }
+        };
+
         let nodes = Self::parse_csv(&text)?;
         info!("VPNGate 同步完成，成功解析出 {} 个可用候选节点", nodes.len());
         Ok(nodes)

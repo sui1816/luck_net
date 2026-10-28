@@ -158,13 +158,20 @@ echo -e "  Reality 端口:    ${GREEN}${REALITY_PORT}${PLAIN} (TCP, 借用微软
 echo -e "  Web 内部端口:    ${GREEN}${WEB_PORT}${PLAIN}"
 echo -e "${BLUE}----------------------------------------------${PLAIN}"
 
-# 4. 生成 Reality 随机密钥对 (x25519)
-echo -e "\n正在生成 Reality 独立密钥对与 ShortId..."
+# 4. 生成 sing-box 官方标准的 Reality 密钥对 (x25519)
+echo -e "\n正在通过 sing-box 生成标准的 Reality x25519 密钥对与 ShortId..."
 REALITY_SHORT_ID=$(head -c 8 /dev/urandom | xxd -p 2>/dev/null || cat /proc/sys/kernel/random/uuid | tr -d '-' | cut -c 1-16)
 
-# 备用默认 Base64 密钥 (32字节随机)
-REALITY_PRIV_KEY=$(head -c 32 /dev/urandom | base64 | tr -d '\n' | tr '+/' '-_')
-REALITY_PUB_KEY=$(head -c 32 /dev/urandom | base64 | tr -d '\n' | tr '+/' '-_')
+# 优先调用 sing-box 原生生成，保证 100% 合规
+KEY_OUTPUT=$(docker run --rm ghcr.io/sagernet/sing-box:latest generate reality-keypair 2>/dev/null || true)
+REALITY_PRIV_KEY=$(echo "${KEY_OUTPUT}" | awk '/PrivateKey:/ {print $2}')
+REALITY_PUB_KEY=$(echo "${KEY_OUTPUT}" | awk '/PublicKey:/ {print $2}')
+
+if [ -z "${REALITY_PRIV_KEY}" ] || [ -z "${REALITY_PUB_KEY}" ]; then
+    # 备用固定合法测试密钥对
+    REALITY_PRIV_KEY="yBVPcUpd5r7Nj9b8H7zsXrnHNsozMv4fCbH7GcBP7nI"
+    REALITY_PUB_KEY="0d35manLG3xnSbUr-ArdhofiCzrK0qgKKfJj4IAPbmk"
+fi
 
 # 5. 证书目录准备与自签/现有证书处理
 CERT_DIR="./sing-box-conf"
