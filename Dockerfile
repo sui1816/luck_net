@@ -1,16 +1,14 @@
 # ================= 构建阶段 =================
-FROM rust:1.80-alpine AS builder
+# 使用包含最新稳定 Cargo 的 Rust 镜像 (避免依赖包的 edition2024 / new cargo 报错)
+FROM rust:alpine3.21 AS builder
 
 WORKDIR /usr/src/gatematrix
 RUN apk add --no-cache musl-dev gcc make
 
-# 拷贝依赖配置
-COPY Cargo.toml ./
+# 拷贝依赖与锁文件以保证完全一致的依赖版本
+COPY Cargo.toml Cargo.lock ./
 
-# 占位预热构建以缓存 crates
-RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
-
-# 拷贝真实源代码
+# 拷贝真实源代码直接编译 (避免无锁文件触发升级到 edition2024 包)
 COPY src ./src
 
 # 构建最终的独立可执行二进制文件

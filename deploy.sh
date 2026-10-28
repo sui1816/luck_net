@@ -32,6 +32,73 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
+# 1.1 主菜单选择：安装 / 查看状态 / 停止 / 重启 / 卸载
+echo -e "${YELLOW}请选择操作选项:${PLAIN}"
+echo -e "  1. 安装/更新 GateMatrix (推荐)"
+echo -e "  2. 查看运行状态与日志"
+echo -e "  3. 重启服务"
+echo -e "  4. 停止服务"
+echo -e "  5. 完全卸载并删除数据"
+echo -e "  0. 退出"
+read -r -p "请输入选项编号 [默认 1]: " MENU_CHOICE
+MENU_CHOICE=${MENU_CHOICE:-1}
+
+case "$MENU_CHOICE" in
+    2)
+        echo -e "${BLUE}=== 容器运行状态 ===${PLAIN}"
+        docker compose ps 2>/dev/null || docker-compose ps 2>/dev/null || true
+        echo -e "${BLUE}=== 最近运行日志 (按 Ctrl+C 退出) ===${PLAIN}"
+        docker compose logs -f --tail=50 2>/dev/null || docker-compose logs -f --tail=50 2>/dev/null || true
+        exit 0
+        ;;
+    3)
+        echo -e "${YELLOW}正在重启 GateMatrix 服务...${PLAIN}"
+        docker compose restart 2>/dev/null || docker-compose restart 2>/dev/null || true
+        echo -e "${GREEN}服务已重启完成。${PLAIN}"
+        exit 0
+        ;;
+    4)
+        echo -e "${YELLOW}正在停止 GateMatrix 服务...${PLAIN}"
+        docker compose down 2>/dev/null || docker-compose down 2>/dev/null || true
+        echo -e "${GREEN}服务已停止。${PLAIN}"
+        exit 0
+        ;;
+    5)
+        read -r -p "确定要完全卸载 GateMatrix 并删除配置数据吗? (y/N): " CONFIRM_UNINSTALL
+        case "${CONFIRM_UNINSTALL}" in
+            [yY][eE][sS]|[yY])
+                echo -e "${YELLOW}正在停止并清理容器...${PLAIN}"
+                docker compose down -v 2>/dev/null || docker-compose down -v 2>/dev/null || true
+                read -r -p "是否同时删除项目代码与持久化数据目录 (/opt/luck_net)? (y/N): " DEL_DATA
+                case "${DEL_DATA}" in
+                    [yY][eE][sS]|[yY])
+                        cd /opt && rm -rf /opt/luck_net
+                        echo -e "${GREEN}GateMatrix 全部数据已清理完毕。${PLAIN}"
+                        exit 0
+                        ;;
+                    *)
+                        echo -e "${GREEN}容器已停止并移除，项目目录已保留。${PLAIN}"
+                        exit 0
+                        ;;
+                esac
+                ;;
+            *)
+                echo -e "卸载操作已取消。"
+                exit 0
+                ;;
+        esac
+        ;;
+    0)
+        exit 0
+        ;;
+    1)
+        # 继续执行安装/更新
+        ;;
+    *)
+        echo -e "${RED}输入无效，默认执行安装/更新${PLAIN}"
+        ;;
+esac
+
 # 1.5 自动更新/拉取 GitHub 最新代码
 if [ -d ".git" ]; then
     echo -e "${YELLOW}正在检测并同步 GitHub 最新代码...${PLAIN}"
